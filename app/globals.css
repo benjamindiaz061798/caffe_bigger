@@ -33,3 +33,20 @@
 .tart-copy,.tart-canvas,.detail-art,.detail-copy{min-width:0}
 .tart-sticky{grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr)}
 @media(max-width:760px){.tart-sticky{grid-template-columns:minmax(0,1fr)}}
+
+/* Product controls and a cart available throughout the page. */
+.add-button{width:auto;height:auto;min-height:42px;padding:10px 14px;border-radius:4px;font-size:11px;line-height:1.3;font-weight:500;background:var(--rust);border-color:var(--rust);color:#fffaf0;white-space:normal}.product-bottom{gap:14px;flex-wrap:wrap}.product-bottom .ingredient-link{min-height:36px}.floating-cart{position:fixed;right:24px;bottom:24px;z-index:40;display:flex;align-items:center;gap:16px;background:var(--ink);color:var(--cream);padding:14px 20px;border:1px solid #66503e;border-radius:8px;box-shadow:0 8px 28px #20160d33;text-align:left}.floating-cart strong{font-size:13px;display:flex;align-items:center;gap:10px;font-weight:500}.floating-cart b{display:grid;place-items:center;min-width:24px;height:24px;border-radius:50%;background:var(--cream);color:var(--ink);font-size:11px}.floating-cart small{display:block;font-size:11px;color:#d9c4ae;margin-top:3px}.toast{bottom:110px;white-space:normal;display:flex;align-items:center;gap:10px}.toast svg{width:16px;height:18px}.cart-item{grid-template-columns:76px minmax(0,1fr) auto;gap:12px}.cart-art{height:76px}.cart-item .remove-item{font-size:11px;align-self:start;padding:8px 0 8px 8px;text-decoration:underline;text-underline-offset:3px}.cart-item .quantity button,.product-quantity .quantity button{width:40px;height:40px;font-size:18px}.quantity span{min-width:30px}.product-quantity{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:24px 0 18px}.product-quantity>span{font-size:12px;font-weight:600}.product-quantity small{width:100%;font-size:10px;color:var(--muted)}
+.food-viewer{position:relative;width:100%;height:100%;min-width:0;touch-action:pan-y;outline-offset:-3px}.food-viewer canvas{cursor:grab;touch-action:pan-y!important}.food-viewer:active canvas{cursor:grabbing}.model-controls{position:absolute;left:14px;right:14px;top:14px;z-index:4;display:flex;justify-content:space-between;align-items:center;gap:8px;pointer-events:none}.model-controls>span{font-size:10px;color:var(--muted);background:#f7f3e9d9;padding:6px 8px;border-radius:3px}.model-controls>div{display:flex;gap:4px;pointer-events:auto}.model-controls button{height:38px;min-width:38px;background:#f7f3e9ed;border:1px solid var(--line);border-radius:4px;font-size:22px}.model-controls .reset-model{font-size:10px;padding:0 9px}.model-controls button:hover{background:var(--ink);color:var(--cream)}.tart-canvas .model-controls{top:56px}
+@media(max-width:760px){.floating-cart{right:14px;bottom:calc(14px + env(safe-area-inset-bottom));padding:12px 15px;gap:12px}.cart-modal{padding:38px 20px 25px}.cart-item{grid-template-columns:58px minmax(0,1fr) auto;gap:8px}.cart-art{height:64px}.cart-item h3{font-size:18px}.cart-item .remove-item{font-size:10px}.model-controls{left:8px;right:8px;top:10px;gap:4px}.model-controls>span{font-size:8px;padding:5px}.model-controls button{height:36px;min-width:36px}.model-controls .reset-model{font-size:8px;padding:0 6px}.tart-canvas .model-controls{top:12px}.add-button{font-size:10px;padding:10px 12px}.toast{bottom:105px;font-size:11px}.footer-bottom{padding-bottom:90px}}
+
+.food-viewer>div,.food-viewer>div>div{touch-action:pan-y!important}
+@media(max-width:760px){.product-modal .model-controls{right:56px}.product-modal .model-controls .reset-model{min-width:0}.tart-canvas .visual-index{top:58px}}
+
+/* Keep navigation available without covering anchors or pinned 3D scenes. */
+:root{--nav-height:99px}
+.header{position:sticky;top:0;z-index:45;box-shadow:0 4px 18px #39291f08}
+html{scroll-padding-top:calc(var(--nav-height) + 12px)}
+section[id]{scroll-margin-top:0}
+.hero-sticky,.tart-sticky{top:var(--nav-height);height:calc(100svh - var(--nav-height));min-height:min(650px,calc(100svh - var(--nav-height)))}
+@media(max-width:760px){:root{--nav-height:79px}}
+@media(prefers-reduced-motion:reduce){.hero-sticky,.tart-sticky{top:auto;height:auto;min-height:0}}

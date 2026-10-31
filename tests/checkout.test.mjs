@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { products, quoteCart, resolveLine } from '../lib/catalog.mjs'
+import { addCartItem, setCartQuantity } from '../lib/cart.mjs'
 import { isAuthorized, confirmPayment, webpayConfig } from '../lib/webpay.mjs'
 import { saveOrder, readOrder, withOrderLock, secretHash, matchesSecret, receipt } from '../lib/order-store.mjs'
 
@@ -77,4 +78,29 @@ test('order storage survives reload and serializes concurrent updates',async()=>
   const temporary=await mkdtemp(path.join(os.tmpdir(),'bigger-tests-')),original=process.env.ORDER_DATA_DIR
   process.env.ORDER_DATA_DIR=temporary
   try{await saveOrder({...order,count:0});await Promise.all(Array.from({length:5},()=>withOrderLock(order.id,async()=>{const current=await readOrder(order.id);await saveOrder({...current,count:current.count+1})})));assert.equal((await readOrder(order.id)).count,5);assert.equal(await readOrder('../outside'),null)}finally{if(original===undefined)delete process.env.ORDER_DATA_DIR;else process.env.ORDER_DATA_DIR=original;await rm(temporary,{recursive:true,force:true})}
+})
+
+test('adding several units merges equivalent preparations and preserves distinct variants',()=>{
+  const first=addCartItem([],{id:'latte',quantity:3})
+  const merged=addCartItem(first,{id:'latte',quantity:2,options:{size:'medium'}})
+  const variants=addCartItem(merged,{id:'latte',quantity:2,options:{size:'large'}})
+  assert.equal(merged.length,1);assert.equal(merged[0].quantity,5)
+  assert.equal(first[0].quantity,3)
+  assert.equal(variants.length,2);assert.equal(quoteCart(variants).amount,16400)
+})
+
+test('cart quantities recalculate totals and zero removes only the selected preparation',()=>{
+  const cart=addCartItem(addCartItem([],{id:'brownie',quantity:3}),{id:'pie-limon',quantity:1})
+  const changed=setCartQuantity(cart,cart[0].key,2)
+  assert.equal(quoteCart(changed).amount,5600)
+  const removed=setCartQuantity(changed,cart[0].key,0)
+  assert.equal(removed.length,1);assert.equal(removed[0].id,'pie-limon')
+  assert.equal(quoteCart(removed).amount,1200);assert.equal(cart[0].quantity,3)
+})
+
+test('adding repeated units never exceeds the payment limit',()=>{
+  const cart=addCartItem([],{id:'brownie',quantity:20})
+  assert.throws(()=>addCartItem(cart,{id:'brownie',quantity:1}),/20/)
+  for(const quantity of [-1,21,1.5,NaN])assert.throws(()=>setCartQuantity(cart,cart[0].key,quantity))
+  assert.equal(cart[0].quantity,20)
 })

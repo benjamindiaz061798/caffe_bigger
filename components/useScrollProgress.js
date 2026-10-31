@@ -9,7 +9,8 @@ export function useScrollProgress(id) {
     const update = () => {
       if (!element) return
       const rect = element.getBoundingClientRect()
-      const p = preference.matches ? 1 : Math.min(1, Math.max(0, -rect.top / Math.max(1, rect.height - innerHeight)))
+      const headerHeight = document.querySelector('.header')?.getBoundingClientRect().height || 0
+      const p = preference.matches ? 1 : Math.min(1, Math.max(0, (headerHeight - rect.top) / Math.max(1, rect.height - innerHeight + headerHeight)))
       progress.current = p
       setReduced(preference.matches)
       setStage(p < .18 ? 0 : p < .85 ? 1 : 2)

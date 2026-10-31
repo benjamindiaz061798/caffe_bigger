@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Menu from '../components/Menu'
 import Cart from '../components/Cart'
-import { Bag, Arrow, Brand } from '../components/ui'
+import { Bag, Arrow, Brand, money } from '../components/ui'
 import { resolveLine } from '../components/products'
+import { addCartItem } from '../lib/cart.mjs'
 const Hero = dynamic(() => import('../components/Hero'), { ssr: false, loading: () => <div className="scene-loading">Preparando tu pausa…</div> })
 const Tart = dynamic(() => import('../components/Tart'), { ssr: false })
 
@@ -23,13 +24,13 @@ export default function Page() {
   useEffect(() => { if (ready) { try { localStorage.setItem('bigger-cart', JSON.stringify(cart)) } catch {} } }, [cart, ready])
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 2800); return () => clearTimeout(timer) }, [notice])
   const count = cart.reduce((n, item) => n + item.quantity, 0)
-  function add(product, options = {}) {
-    const line = resolveLine({id:product.id,quantity:1,options})
-    setCart(current => {
-      const found = current.find(item => item.key === line.key)
-      return found ? current.map(item => item.key === line.key ? { ...item, quantity: Math.min(20, item.quantity + 1) } : item) : [...current, { id: product.id, key:line.key, options:line.options, quantity: 1 }]
-    })
-    setNotice(`${product.name} agregado a tu pedido`)
+  const total = cart.reduce((sum,item) => sum + resolveLine(item).amount,0)
+  function add(product, options = {}, quantity = 1) {
+    try {
+      setCart(addCartItem(cart,{id:product.id,options,quantity}))
+      setNotice(`${quantity} × ${product.name} agregado al carrito`)
+      return true
+    } catch(error) { setNotice(error.message); return false }
   }
   return <>
     <a className="skip-link" href="#carta">Saltar a la carta</a>
@@ -37,7 +38,7 @@ export default function Page() {
     <header className="header">
       <a href="#inicio" aria-label="Caffe Bigger, inicio"><Brand /></a>
       <nav aria-label="Navegación principal"><a href="#carta">Nuestra carta</a><a href="#ingredientes">Por dentro</a><a href="#experiencia">La experiencia</a></nav>
-      <button className="bag-button" onClick={() => setCartOpen(true)}><Bag /><span>Mi pedido</span><b>{count}</b></button>
+      <button className="bag-button" aria-haspopup="dialog" aria-expanded={cartOpen} onClick={() => setCartOpen(true)}><Bag /><span>Carrito</span><b>{count}</b></button>
     </header>
     <main>
       <section className="hero-scroll" id="inicio"><div className="hero hero-sticky">
@@ -67,7 +68,8 @@ export default function Page() {
       <section className="closing"><span className="eyebrow">NOS GUSTAN LAS BUENAS PAUSAS</span><h2>La tuya tiene<br />sabor a <em>Bigger.</em></h2><a className="button cream" href="#carta">Encuentra tu favorito <Arrow /></a><span className="closing-flower" aria-hidden="true">✳</span></section>
     </main>
     <footer><Brand light /><p>Café, algo rico y un momento para ti.</p><a href="#inicio">Volver arriba ↑</a><div className="footer-bottom"><span>© {new Date().getFullYear()} Caffe Bigger</span><span>Webpay Plus · Integración de prueba</span></div></footer>
+    {!cartOpen&&<button className="floating-cart" aria-label={`Ver carrito, ${count} productos, ${money(total)}`} aria-haspopup="dialog" onClick={()=>setCartOpen(true)}><Bag/><span><strong>Ver carrito <b>{count}</b></strong><small>{count?money(total):'Arma tu pedido'}</small></span><Arrow/></button>}
     <Cart open={cartOpen} onClose={() => setCartOpen(false)} cart={cart} setCart={setCart} />
-    <div role="status" className={`toast ${notice ? 'visible' : ''}`}><span>✓</span> {notice}</div>
+    <div role="status" className={`toast ${notice ? 'visible' : ''}`}><Bag/> {notice}</div>
   </>
 }

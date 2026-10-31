@@ -72,3 +72,11 @@ La pastelería utiliza modelos específicos (`BakeryModel.jsx` y `DetailedShapes
 Las fajitas cerradas se presentan en dos mitades con corte diagonal, tortilla tostada, solapa y extremo plegado. Al abrirlas se conserva el desglose por capas. `SaladModel.jsx` construye hojas onduladas, cortes de vegetales y proteínas; la vista se actualiza con las opciones de la ficha. Antes de seleccionar se muestra una combinación de ejemplo, identificada en pantalla. Las recetas siguen siendo referenciales.
 
 El visor de la ficha se reutiliza entre productos y pausa el renderizado mientras el modal está cerrado.
+
+## Carrito y controles 360°
+
+Cada vista de producto 3D permite girar horizontalmente sin límite mediante arrastre, botones de giro o flechas del teclado (con foco en el visor). «Restablecer» o la tecla Inicio recuperan la orientación inicial. El desglose por scroll y el botón de separar ingredientes siguen funcionando.
+
+«Agregar al carrito» aparece en todas las tarjetas. Las fichas permiten elegir entre 1 y 20 unidades antes de añadir. Preparaciones iguales se suman en una línea; variantes con opciones diferentes se mantienen separadas. El carrito flotante permanece accesible durante la navegación, muestra unidades y total, y permite aumentar, disminuir o eliminar cada preparación antes de continuar a Webpay Plus. Los importes se validan de nuevo en el servidor.
+
+`lib/cart.mjs` concentra la suma de unidades y los límites de cantidad. Las pruebas incluyen acumulación de preparaciones equivalentes, variantes separadas, eliminación y recálculo de totales. El pago sigue en integración hasta configurar las credenciales y requisitos de producción descritos arriba.
