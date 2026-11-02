@@ -9,7 +9,7 @@ test("PostgreSQL migration, atomic purchases and workspace isolation", async (t)
   const db = await PGlite.create({ extensions: { pgcrypto } });
   try {
     await db.exec(
-      `create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`,
+      `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,raw_app_meta_data jsonb,raw_user_meta_data jsonb,created_at timestamptz default now());create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id));create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`,
     );
     await db.query("insert into auth.users(id) values ($1),($2)", [A, B]);
     const migrations = new URL("../supabase/migrations/", import.meta.url);
@@ -353,6 +353,277 @@ test("PostgreSQL migration, atomic purchases and workspace isolation", async (t)
             ),
           ),
         );
+      },
+    );
+    await t.test(
+      "Firebase bootstrap grants are private, expire and cannot be reused",
+      async () => {
+        const uid = "grant-test",
+          email = "grant-test@example.invalid",
+          id = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+        await assert.rejects(() =>
+          asUser(A, () =>
+            db.query("select public.firebase_registration_grant($1,$2)", [
+              uid,
+              email,
+            ]),
+          ),
+        );
+        const token = (
+          await asUser(
+            null,
+            () =>
+              db.query(
+                "select public.firebase_registration_grant($1,$2) as token",
+                [uid, email],
+              ),
+            "service_role",
+          )
+        ).rows[0].token;
+        await assert.rejects(() =>
+          db.query(
+            "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3::jsonb)",
+            [
+              id,
+              email,
+              JSON.stringify({
+                bigger_registration_uid: uid,
+                bigger_registration_token: "forged",
+              }),
+            ],
+          ),
+        );
+        await db.query(
+          "update private.firebase_registration_grants set expires_at=now()-interval '1 minute' where email=$1",
+          [email],
+        );
+        await assert.rejects(() =>
+          db.query(
+            "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3::jsonb)",
+            [
+              id,
+              email,
+              JSON.stringify({
+                bigger_registration_uid: uid,
+                bigger_registration_token: token,
+              }),
+            ],
+          ),
+        );
+        const fresh = (
+          await asUser(
+            null,
+            () =>
+              db.query(
+                "select public.firebase_registration_grant($1,$2) as token",
+                [uid, email],
+              ),
+            "service_role",
+          )
+        ).rows[0].token;
+        const metadata = JSON.stringify({
+          bigger_registration_uid: uid,
+          bigger_registration_token: fresh,
+        });
+        await db.query(
+          "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3::jsonb)",
+          [id, email, metadata],
+        );
+        assert.equal(
+          (
+            await db.query(
+              "select * from private.firebase_registration_grants where email=$1",
+              [email],
+            )
+          ).rows.length,
+          0,
+        );
+        await db.query("delete from auth.users where id=$1", [id]);
+        await assert.rejects(() =>
+          db.query(
+            "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3::jsonb)",
+            [id, email, metadata],
+          ),
+        );
+      },
+    );
+    await t.test(
+      "Firebase identities use bounded server-issued sessions and buyer permissions",
+      async () => {
+        const C = "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          S = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+        await db.query(
+          "insert into private.firebase_registration(workspace_id) values($1)",
+          [workspaceA],
+        );
+        await assert.rejects(() =>
+          db.query(
+            'insert into auth.users(id,email,raw_user_meta_data) values($1,\'forged@example.invalid\',\'{"bigger_identity_provider":"firebase","firebase_uid":"forged"}\')',
+            [C],
+          ),
+        );
+        await db.query(
+          'insert into auth.users(id,email,raw_app_meta_data) values($1,\'firebase@example.invalid\',\'{"bigger_identity_provider":"firebase","firebase_uid":"firebase-test"}\')',
+          [C],
+        );
+        await assert.rejects(() =>
+          asUser(A, () =>
+            db.query(
+              "select public.firebase_link('firebase-test',$1,'firebase@example.invalid')",
+              [C],
+            ),
+          ),
+        );
+        await asUser(
+          null,
+          () =>
+            db.query(
+              "select public.firebase_link('firebase-test',$1,'firebase@example.invalid')",
+              [C],
+            ),
+          "service_role",
+        );
+        assert.equal(
+          (
+            await db.query(
+              "select role from public.memberships where user_id=$1",
+              [C],
+            )
+          ).rows[0].role,
+          "buyer",
+        );
+        await asUser(
+          null,
+          () =>
+            db.query(
+              "select public.firebase_link('firebase-test',$1,'firebase@example.invalid')",
+              [C],
+            ),
+          "service_role",
+        );
+        assert.equal(
+          (
+            await db.query(
+              "select count(*)::int as n from public.memberships where user_id=$1",
+              [C],
+            )
+          ).rows[0].n,
+          1,
+        );
+        assert.equal(
+          (await asUser(C, () => db.query("select * from public.suppliers")))
+            .rows.length,
+          0,
+        );
+        await assert.rejects(() =>
+          asUser(C, () =>
+            db.query("select public.list_workspace_users($1)", [workspaceA]),
+          ),
+        );
+        await db.query("insert into auth.sessions(id,user_id) values($1,$2)", [
+          S,
+          C,
+        ]);
+        await asUser(
+          null,
+          () =>
+            db.query(
+              "select public.firebase_record_session($1,$2,now()+interval '2 hours')",
+              [C, S],
+            ),
+          "service_role",
+        );
+        const remaining = (
+          await db.query(
+            "select extract(epoch from (expires_at-now())) as seconds from private.firebase_sessions where session_id=$1",
+            [S],
+          )
+        ).rows[0].seconds;
+        assert.ok(Number(remaining) <= 3600);
+        await db.query("select set_config('request.jwt.claims',$1,false)", [
+          JSON.stringify({ session_id: S }),
+        ]);
+        assert.ok(
+          (await asUser(C, () => db.query("select * from public.suppliers")))
+            .rows.length > 0,
+        );
+        await assert.rejects(() =>
+          asUser(C, () =>
+            db.query("select public.set_workspace_user_enabled($1,$2,false)", [
+              workspaceA,
+              A,
+            ]),
+          ),
+        );
+        await assert.rejects(() =>
+          asUser(B, () =>
+            db.query("select public.list_workspace_users($1)", [workspaceA]),
+          ),
+        );
+        const listed = (
+          await asUser(A, () =>
+            db.query("select public.list_workspace_users($1) as users", [
+              workspaceA,
+            ]),
+          )
+        ).rows[0].users;
+        assert.ok(listed.some((u) => u.user_id === C && u.firebase_account));
+        await asUser(A, () =>
+          db.query("select public.set_workspace_user_enabled($1,$2,false)", [
+            workspaceA,
+            C,
+          ]),
+        );
+        assert.equal(
+          (await asUser(C, () => db.query("select * from public.suppliers")))
+            .rows.length,
+          0,
+        );
+        await assert.rejects(() =>
+          asUser(
+            null,
+            () =>
+              db.query(
+                "select public.firebase_link('firebase-test',$1,'firebase@example.invalid')",
+                [C],
+              ),
+            "service_role",
+          ),
+        );
+        await asUser(A, () =>
+          db.query("select public.set_workspace_user_enabled($1,$2,true)", [
+            workspaceA,
+            C,
+          ]),
+        );
+        await db.query(
+          "update private.firebase_sessions set expires_at=now()-interval '1 minute' where session_id=$1",
+          [S],
+        );
+        assert.equal(
+          (await asUser(C, () => db.query("select * from public.suppliers")))
+            .rows.length,
+          0,
+        );
+        await db.query("delete from auth.sessions where id=$1", [S]);
+        assert.equal(
+          (
+            await db.query(
+              "select * from private.firebase_sessions where session_id=$1",
+              [S],
+            )
+          ).rows.length,
+          0,
+        );
+        await assert.rejects(() =>
+          asUser(A, () =>
+            db.query("select public.set_workspace_user_enabled($1,$2,false)", [
+              workspaceA,
+              A,
+            ]),
+          ),
+        );
+        await db.query("select set_config('request.jwt.claims','{}',false)");
       },
     );
   } finally {

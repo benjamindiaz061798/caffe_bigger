@@ -2,7 +2,7 @@
   "name": "Bigger Compras — Proveedores y pedidos",
   "short_name": "Bigger Compras",
   "description": "Tus proveedores y compras habituales, en orden.",
-  "start_url": "/",
+  "start_url": "/compras",
   "scope": "/",
   "id": "/",
   "display": "standalone",

@@ -3197,3 +3197,22 @@ textarea {
 .info-box .btn {
   margin-top: 10px;
 }
+
+.account-links {display:grid;gap:18px;margin:22px 0 28px;font-size:13px;}
+.access-cafe-link {display:inline-block;margin-top:20px;color:#895334;font-size:13px;text-underline-offset:4px;}
+.account-links button {display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:0;color:var(--accent,#a94a30);text-decoration:underline;text-underline-offset:4px;cursor:pointer;font:inherit;}
+.account-success {display:flex;gap:10px;padding:14px;background:#e9eee3;color:#43583a;border-radius:12px;margin:16px 0;font-size:14px;}
+.account-success p {margin:0;}
+.recovery-page {min-height:100svh;padding:32px 20px;background:#f5f1e8;}
+.recovery-page>a {text-decoration:none;color:inherit;}
+.recovery-card {max-width:460px;margin:8vh auto;padding:32px;background:#fffdf8;border:1px solid #e1dacd;border-radius:20px;}
+.recovery-card h1 {font:500 32px var(--font-heading,serif);margin:20px 0 12px;}
+.recovery-card>p {line-height:1.7;color:#716958;margin-bottom:24px;}
+.users-panel {padding:24px 28px;}
+.users-panel>p {line-height:1.6;color:#756a5c;}
+.users-panel ul {list-style:none;margin:22px 0;padding:0;}
+.users-panel li {display:flex;gap:20px;justify-content:space-between;align-items:center;border-top:1px solid #e6e0d5;padding:18px 0;}
+.users-panel li>div {min-width:0;overflow-wrap:anywhere;display:grid;gap:7px;}
+.users-panel li span,.users-panel li small,.account-email {font-size:13px;color:#756a5c;}
+.users-panel li .btn {flex-shrink:0;}
+@media(max-width:540px){.users-panel{padding:20px;}.users-panel li{align-items:flex-start;flex-direction:column;gap:12px;}.recovery-card{padding:24px;}}

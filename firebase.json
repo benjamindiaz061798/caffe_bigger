@@ -1,0 +1,6 @@
+{
+  "auth": {
+    "authorizedDomains": ["localhost", "caffebigger.vercel.app", "caffe-bigger-cuentas-2026.firebaseapp.com"],
+    "providers": {"emailPassword": true}
+  }
+}

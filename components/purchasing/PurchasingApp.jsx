@@ -22,6 +22,14 @@ import { OrdersList, ProductsList, SuppliersList } from "./Lists";
 import { SupplierForm, ProductForm } from "./EntityForms";
 import OrderBuilder from "./OrderBuilder";
 import OrderDetail from "./OrderDetail";
+import AccountAccess from "./AccountAccess";
+import { PasswordChangeForm } from "./PasswordForms";
+import UsersPanel from "./UsersPanel";
+import {
+  getPurchaseSession,
+  observeIdentity,
+  logoutIdentity,
+} from "../../lib/purchasing/identity";
 import {
   Brand,
   Button,
@@ -74,6 +82,7 @@ export default function PurchasingApp() {
     [data, setData] = useState(emptyData),
     [workspace, setWorkspace] = useState(null),
     [user, setUser] = useState(null),
+    [memberRole, setMemberRole] = useState(null),
     [page, setPage] = useState("orders"),
     [wizard, setWizard] = useState(null),
     [filter, setFilter] = useState(""),
@@ -110,6 +119,7 @@ export default function PurchasingApp() {
       const result = await loadWorkspace();
       if (seq !== loadSequence.current) return;
       setUser(result.user);
+      setMemberRole(result.role);
       if (result.setup) {
         setMode("setup");
         setData(emptyData());
@@ -137,29 +147,33 @@ export default function PurchasingApp() {
       () => setSplash(false),
       matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900,
     );
-    if (cloudConfigured)
-      getSupabase()
-        .auth.getSession()
-        .then(({ data, error }) => {
+    let unsubscribe;
+    if (cloudConfigured) {
+      getPurchaseSession()
+        .then((session) => {
           if (!active) return;
-          if (error) {
+          if (session) openCloud();
+          else setMode("login");
+        })
+        .catch((error) => {
+          if (active) {
             setFailure(errorText(error));
             setMode("login");
-          } else if (data.session) openCloud();
-          else setMode("login");
+          }
         });
-    else enterDemo();
-    const subscription = getSupabase()?.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT" && active) {
-        loadSequence.current++;
-        setMode("login");
-        setUser(null);
-        setWorkspace(null);
-        setData(emptyData());
-        setWizard(null);
-        setModal(null);
-      }
-    });
+      unsubscribe = observeIdentity((identity) => {
+        if (!identity && active) {
+          loadSequence.current++;
+          setMode("login");
+          setUser(null);
+          setMemberRole(null);
+          setWorkspace(null);
+          setData(emptyData());
+          setWizard(null);
+          setModal(null);
+        }
+      });
+    } else enterDemo();
     function prompt(event) {
       event.preventDefault();
       setInstallPrompt(event);
@@ -176,7 +190,7 @@ export default function PurchasingApp() {
     return () => {
       active = false;
       clearTimeout(timer);
-      subscription?.data.subscription.unsubscribe();
+      unsubscribe?.();
       removeEventListener("beforeinstallprompt", prompt);
       removeEventListener("appinstalled", done);
     };
@@ -418,11 +432,7 @@ export default function PurchasingApp() {
   async function logout() {
     if (mode === "cloud") {
       try {
-        await getSupabase()
-          .auth.signOut({ scope: "local" })
-          .then(({ error }) => {
-            if (error) throw error;
-          });
+        await logoutIdentity();
       } catch (e) {
         notify(errorText(e), "error");
       }
@@ -463,7 +473,7 @@ export default function PurchasingApp() {
           <p>Abriendo tu espacio de compras…</p>
         </div>
       ) : mode === "login" || mode === "setup" || mode === "failed" ? (
-        <AccessScreen
+        <AccountAccess
           mode={mode}
           error={failure}
           setError={setFailure}
@@ -832,6 +842,33 @@ export default function PurchasingApp() {
                 </p>
               </div>
             </div>
+            {mode === "cloud" && (
+              <>
+                <p className="account-email">
+                  {user?.email} ·{" "}
+                  {memberRole === "owner" ? "Administrador" : "Compras"}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setModal({ type: "password" })}
+                >
+                  <LockKeyhole size={16} />
+                  Cambiar contraseña
+                </Button>
+                {memberRole === "owner" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setModal({ type: "users" })}
+                  >
+                    <Settings2 size={16} />
+                    Administrar usuarios
+                  </Button>
+                )}
+              </>
+            )}
+            <a className="btn outline" href="/">
+              Volver a la cafetería <ArrowUpRight size={16} />
+            </a>
             <Button variant="outline" onClick={exportData}>
               <Download size={16} />
               Exportar copia de mis datos
@@ -869,6 +906,32 @@ export default function PurchasingApp() {
           </div>
         </Dialog>
       )}
+      {modal?.type === "password" && (
+        <Dialog
+          title="Cambia tu contraseña"
+          eyebrow="SEGURIDAD DE LA CUENTA"
+          onClose={() => setModal(null)}
+        >
+          <PasswordChangeForm
+            onSuccess={() => {
+              setModal({ type: "space" });
+              notify(
+                "Contraseña actualizada. Las otras sesiones de compras se cerraron.",
+              );
+            }}
+          />
+        </Dialog>
+      )}
+      {modal?.type === "users" && memberRole === "owner" && (
+        <Dialog
+          title="Usuarios de Caffe Bigger"
+          eyebrow="ADMINISTRACIÓN"
+          onClose={() => setModal(null)}
+          wide
+        >
+          <UsersPanel workspaceId={workspace.id} />
+        </Dialog>
+      )}
       {notice && (
         <div
           className={`toast-notice ${notice.tone}`}
@@ -886,145 +949,5 @@ export default function PurchasingApp() {
         </div>
       )}
     </>
-  );
-}
-function AccessScreen({
-  mode,
-  error,
-  setError,
-  onDemo,
-  onCloud,
-  cloudConfigured,
-}) {
-  const [busy, setBusy] = useState(false);
-  async function submit(e) {
-    e.preventDefault();
-    setError("");
-    setBusy(true);
-    const fields = Object.fromEntries(new FormData(e.currentTarget));
-    try {
-      if (mode === "setup") {
-        const { error } = await getSupabase().rpc("create_purchase_workspace", {
-          p_name: fields.name,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await getSupabase().auth.signInWithPassword({
-          email: fields.email,
-          password: fields.password,
-        });
-        if (error)
-          throw new Error(
-            "No pudimos iniciar sesión. Revisa el correo y la contraseña.",
-          );
-      }
-      await onCloud();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="access-page">
-      <section className="access-story">
-        <Brand />
-        <div>
-          <span className="eyebrow">HECHO PARA TU CAFETERÍA</span>
-          <h1>
-            Lo habitual,
-            <br />
-            mucho más
-            <br />
-            <em>simple.</em>
-          </h1>
-          <p>
-            Proveedores a mano. Compras en orden.
-            <br />
-            Un mensaje listo para compartir.
-          </p>
-        </div>
-        <span className="access-foot">BIGGER / COMPRAS A PROVEEDORES</span>
-      </section>
-      <section className="access-form">
-        <div className="access-form-inner">
-          <span className="access-icon">
-            <Package size={27} />
-          </span>
-          <h2>
-            {mode === "setup"
-              ? "Dale un nombre a tu espacio."
-              : mode === "failed"
-                ? "Revisemos tu espacio."
-                : "Bienvenido a Bigger."}
-          </h2>
-          <p>
-            {mode === "setup"
-              ? "Tu sesión está lista. Crea el espacio donde organizarás los proveedores y las compras."
-              : cloudConfigured
-                ? "Entra con tu cuenta autorizada para continuar con tus compras."
-                : "La demostración está lista. El acceso privado estará disponible al conectar la base de datos."}
-          </p>
-          {(cloudConfigured || mode === "setup") && mode !== "failed" && (
-            <form className="entity-form" onSubmit={submit}>
-              {mode === "setup" ? (
-                <label>
-                  Nombre de la cafetería
-                  <input
-                    name="name"
-                    defaultValue="Caffe Bigger"
-                    required
-                    maxLength={100}
-                  />
-                </label>
-              ) : (
-                <>
-                  <label>
-                    Correo electrónico
-                    <input
-                      name="email"
-                      type="email"
-                      required
-                      autoComplete="username"
-                      placeholder="tu@cafeteria.cl"
-                    />
-                  </label>
-                  <label>
-                    Contraseña
-                    <input
-                      name="password"
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                    />
-                  </label>
-                </>
-              )}
-              <Button type="submit" busy={busy}>
-                {mode === "setup" ? "Crear espacio" : "Ingresar"}
-                <ChevronRight size={17} />
-              </Button>
-            </form>
-          )}
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          {mode !== "setup" && (
-            <Button variant="outline" onClick={onDemo}>
-              <MonitorSmartphone size={17} />
-              {mode === "failed"
-                ? "Reintentar lectura local"
-                : "Explorar demostración"}
-            </Button>
-          )}
-          <p className="access-hint">
-            Tu información de compras pertenece a tu espacio. No se envían
-            mensajes automáticamente.
-          </p>
-        </div>
-      </section>
-    </div>
   );
 }
