@@ -33,7 +33,7 @@ Sin configuración de Supabase se abre una **demostración local claramente iden
 El espacio conectado requiere la configuración siguiente. Su integración está implementada; no se considera desplegada una base de datos real hasta aplicar la migración y configurar un proyecto propio.
 
 1. Crea un proyecto en Supabase y ejecuta una vez `supabase/migrations/202611020001_purchasing.sql` en su editor SQL. También puedes aplicar la migración mediante Supabase CLI.
-2. Crea el primer usuario autorizado desde **Authentication → Users** en Supabase. La aplicación no ofrece registro público.
+2. Desactiva el registro público de nuevos usuarios en la configuración de Authentication de Supabase y crea el primer usuario autorizado desde **Authentication → Users**. La aplicación no ofrece registro público; desactivarlo también en el servicio evita altas directas mediante su API.
 3. Copia `.env.example` a `.env.local` y configura `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (o la clave `anon` heredada). Estas son claves públicas destinadas al cliente; nunca uses una clave secreta o `service_role` aquí.
 4. Reinicia el servidor. Ingresa con el usuario creado y crea el espacio de la cafetería en el primer acceso.
 5. Para autorizar al encargado en el mismo espacio, crea su usuario en Authentication y agrega desde el editor SQL una fila de `memberships` con el UUID del espacio, el UUID del usuario y el rol `buyer`. Esa operación corresponde al administrador; los usuarios no pueden concederse permisos a otro espacio.
