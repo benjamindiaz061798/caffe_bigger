@@ -9,3 +9,5 @@
 - Instalación: manifiesto e iconos PWA, HTTPS; sin prometer sincronización offline.
 - Publicación: GitHub y Vercel; rama nueva para conservar la versión anterior.
 - Mejoras posteriores: dictado, dashboard e incorporación de facturas.
+
+Proyecto Supabase conectado: Bigger Compras (`usvxhrijwupttqoecvsi`), plan gratuito, región São Paulo. Seis tablas de negocio con RLS y una lista privada de cuentas autorizadas. Acceso inicial del encargado aprovisionado; el endpoint temporal de inicialización está cerrado.

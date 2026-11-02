@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -9,18 +9,15 @@ test("PostgreSQL migration, atomic purchases and workspace isolation", async (t)
   const db = await PGlite.create({ extensions: { pgcrypto } });
   try {
     await db.exec(
-      `create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`,
+      `create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;grant usage on schema public,auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`,
     );
-    await db.query("insert into auth.users values ($1),($2)", [A, B]);
-    await db.exec(
-      await readFile(
-        new URL(
-          "../supabase/migrations/202611020001_purchasing.sql",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-    );
+    await db.query("insert into auth.users(id) values ($1),($2)", [A, B]);
+    const migrations = new URL("../supabase/migrations/", import.meta.url);
+    for (const file of (await readdir(migrations))
+      .filter((name) => name.endsWith(".sql"))
+      .sort()) {
+      await db.exec(await readFile(new URL(file, migrations), "utf8"));
+    }
     async function asUser(id, fn, role = "authenticated") {
       await db.exec(`begin;set local role ${role};`);
       try {
@@ -90,6 +87,35 @@ test("PostgreSQL migration, atomic purchases and workspace isolation", async (t)
           ],
         ),
       );
+    await t.test(
+      "only explicitly authorized emails can create an Auth account",
+      async () => {
+        const id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+        await assert.rejects(() =>
+          db.query("insert into auth.users(id,email) values($1,$2)", [
+            id,
+            "outside@example.invalid",
+          ]),
+        );
+        await db.query(
+          "insert into private.authorized_accounts(email) values($1)",
+          ["authorized@example.invalid"],
+        );
+        await db.query("insert into auth.users(id,email) values($1,$2)", [
+          id,
+          "authorized@example.invalid",
+        ]);
+        await assert.rejects(() =>
+          asUser(A, () =>
+            db.query("select * from private.authorized_accounts"),
+          ),
+        );
+        const wrappers = await db.query(
+          "select prosecdef from pg_proc where pronamespace='public'::regnamespace and proname in ('create_purchase_workspace','save_purchase_order','confirm_purchase_order')",
+        );
+        assert.ok(wrappers.rows.every((row) => row.prosecdef === false));
+      },
+    );
     let order;
     await t.test(
       "authorized order captures database values, not caller descriptions",

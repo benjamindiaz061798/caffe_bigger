@@ -1,6 +1,6 @@
 # Bigger Compras
 
-Plataforma móvil para preparar pedidos de una cafetería a sus proveedores. El enfoque anterior de venta al público permanece en la rama `main`; esta implementación se desarrolla en `codex/compras-proveedores`.
+Plataforma móvil para preparar pedidos de una cafetería a sus proveedores. El enfoque actual es la gestión de compras a proveedores. El historial de Git conserva la versión anterior de venta al público.
 
 ## Alcance implementado
 
@@ -30,18 +30,25 @@ npm run build
 
 Sin configuración de Supabase se abre una **demostración local claramente identificada**. Incluye proveedores ficticios sin teléfono. Los cambios e historial se guardan en este navegador (`localStorage`), no hay cuentas privadas ni sincronización. La opción Mi espacio permite exportar una copia JSON. No ingreses datos privados en un dispositivo compartido.
 
-El espacio conectado requiere la configuración siguiente. Su integración está implementada; no se considera desplegada una base de datos real hasta aplicar la migración y configurar un proyecto propio.
+El proyecto conectado es **Bigger Compras**, referencia `usvxhrijwupttqoecvsi`, en São Paulo (`sa-east-1`), plan gratuito. Las migraciones de `supabase/migrations` ya están aplicadas en ese proyecto y sus versiones coinciden con el historial remoto. No vuelvas a ejecutar la creación de tablas manualmente sobre él.
 
-1. Crea un proyecto en Supabase y ejecuta una vez `supabase/migrations/202611020001_purchasing.sql` en su editor SQL. También puedes aplicar la migración mediante Supabase CLI.
-2. Desactiva el registro público de nuevos usuarios en la configuración de Authentication de Supabase y crea el primer usuario autorizado desde **Authentication → Users**. La aplicación no ofrece registro público; desactivarlo también en el servicio evita altas directas mediante su API.
-3. Copia `.env.example` a `.env.local` y configura `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (o la clave `anon` heredada). Estas son claves públicas destinadas al cliente; nunca uses una clave secreta o `service_role` aquí.
-4. Reinicia el servidor. Ingresa con el usuario creado y crea el espacio de la cafetería en el primer acceso.
-5. Para autorizar al encargado en el mismo espacio, crea su usuario en Authentication y agrega desde el editor SQL una fila de `memberships` con el UUID del espacio, el UUID del usuario y el rol `buyer`. Esa operación corresponde al administrador; los usuarios no pueden concederse permisos a otro espacio.
-6. En Vercel configura las mismas variables para el entorno de despliegue y vuelve a desplegar: las variables `NEXT_PUBLIC_` se incorporan durante la compilación.
+La configuración local está en `.env.local`, excluida de Git. Vercel utiliza `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; son datos públicos para el cliente. Nunca coloques una clave secreta o `service_role` en variables `NEXT_PUBLIC_`.
+
+La cuenta inicial del encargado tiene su acceso en `.data/ACCESO-BIGGER.txt`, un archivo privado local excluido de Git. Las contraseñas y tokens no forman parte del repositorio. La inicialización utilizó el SDK administrativo de Auth desde una función protegida de un solo uso; el código administrativo fue sustituido y ese endpoint ahora responde 410.
+
+Para autorizar otro encargado:
+
+1. El administrador agrega su correo normalizado a `private.authorized_accounts` desde Supabase. La tabla no tiene acceso desde el cliente.
+2. Crea el usuario desde **Authentication → Users**.
+3. Agrega su UUID y el UUID del espacio a `public.memberships` con el rol `buyer`.
+
+El trigger `bigger_authorized_account` rechaza nuevas cuentas cuyo correo no haya sido autorizado, incluso si se intenta utilizar directamente la API de registro. Como protección adicional puede desactivarse el registro público desde la configuración de Authentication; la aplicación no ofrece registro público.
+
+Para un proyecto Supabase nuevo aplica las migraciones en orden, configura las dos variables públicas y crea los usuarios autorizados. La creación del primer espacio utiliza una sesión real; los usuarios siguientes deben vincularse al mismo espacio mediante una membresía.
 
 ## Datos y permisos
 
-PostgreSQL mantiene espacios, membresías, proveedores, productos, pedidos y detalles. RLS restringe los datos a los miembros autenticados. Los usuarios no tienen permisos directos para escribir pedidos o membresías: funciones transaccionales controlan la creación del espacio, el guardado y la confirmación manual.
+PostgreSQL mantiene espacios, membresías, proveedores, productos, pedidos y detalles. RLS restringe los datos a los miembros autenticados. Los usuarios no tienen permisos directos para escribir pedidos o membresías: funciones transaccionales privadas controlan la creación del espacio, el guardado y la confirmación manual. Las funciones públicas son envoltorios con SECURITY INVOKER que delegan a esas operaciones; las comprobaciones de usuario y membresía están en la base de datos.
 
 El servidor valida proveedor, productos, cantidades y unidades, y toma las descripciones desde la base de datos. El guardado es atómico, conserva el historial, mantiene el orden de las líneas y evita duplicados al reintentar una preparación. Archivar un proveedor o producto conserva los pedidos anteriores. Repetir filtra los productos archivados y avisa al usuario.
 
@@ -51,7 +58,7 @@ Abre la aplicación mediante HTTPS. En Chrome compatible puede ofrecer instalaci
 
 ## Verificación
 
-`npm test` ejecuta pruebas de reglas de compra y la migración en PostgreSQL embebido (PGlite). Incluye aislamiento entre dos espacios, permisos anónimos, intentos de elevar privilegios, integridad entre proveedores, cantidades, atomicidad, idempotencia, borradores y conservación histórica. Estas pruebas no sustituyen la comprobación final con el proyecto Supabase conectado.
+`npm test` ejecuta pruebas de reglas de compra y la migración en PostgreSQL embebido (PGlite). Incluye aislamiento entre dos espacios, permisos anónimos, intentos de elevar privilegios, integridad entre proveedores, cantidades, atomicidad, idempotencia, borradores y conservación histórica. También se ejecutó `supabase/tests/live-purchasing.sql` en la base real, con el contexto del usuario autenticado. Comprueba aislamiento, escrituras, snapshots, reintentos, borradores, cantidades, confirmación y bloqueo anónimo. Los registros de prueba se revierten con ROLLBACK. El inicio de sesión y la creación del espacio se comprueban además mediante HTTPS contra Auth y la Data API.
 
 ## Diseño
 
