@@ -24,7 +24,7 @@ npm test
 npm run build
 ```
 
-`NEXT_BUILD_DIR` permite separar el directorio de la compilación y el del servidor de desarrollo. `.next-purchasing` es el directorio predeterminado.
+`NEXT_BUILD_DIR` permite separar el directorio de la compilación y el del servidor de desarrollo. `.next` es el directorio predeterminado, compatible con la configuración automática de Vercel.
 
 ## Demostración y espacio conectado
 

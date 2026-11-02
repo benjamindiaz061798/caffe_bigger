@@ -1,7 +1,7 @@
 module.exports = {
   reactStrictMode: true,
   devIndicators: false,
-  distDir: process.env.NEXT_BUILD_DIR || ".next-purchasing",
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
   async headers() {
     return [
       {
