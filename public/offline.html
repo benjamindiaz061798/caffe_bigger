@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Bigger Compras · Sin conexión</title
+  ><style>
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      background: #f7f6f2;
+      font: 15px/1.7 system-ui;
+      color: #655644;
+    }
+    main {
+      padding: 35px;
+      max-width: 360px;
+    }
+    img {
+      width: 65px;
+      border-radius: 18px;
+    }
+    h1 {
+      font: 35px/1.15 Georgia;
+      color: #684c31;
+    }
+    p {
+      color: #96856d;
+    }
+    button {
+      padding: 13px 20px;
+      color: white;
+      border: 0;
+      border-radius: 7px;
+      background: #a36342;
+      font: inherit;
+      cursor: pointer;
+    }
+  </style>
+  <main>
+    <img src="/icons/icon-192.png" alt="Bigger Compras" />
+    <h1>Retomamos cuando vuelva la conexión.</h1>
+    <p>
+      Necesitas internet para abrir el espacio conectado y sincronizar tus
+      pedidos. No se enviaron mensajes automáticamente.
+    </p>
+    <button onclick="location.reload()">Intentar nuevamente</button>
+  </main>
+</html>

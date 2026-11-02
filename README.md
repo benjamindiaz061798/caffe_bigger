@@ -1,82 +1,58 @@
-# Caffe Bigger
+# Bigger Compras
 
-Next.js 14 + React + Three.js. Experiencia con scroll, carta completa y Webpay Plus.
+Plataforma móvil para preparar pedidos de una cafetería a sus proveedores. El enfoque anterior de venta al público permanece en la rama `main`; esta implementación se desarrolla en `codex/compras-proveedores`.
 
-```powershell
+## Alcance implementado
+
+- Registro, edición, archivo y reactivación de proveedores y productos.
+- Catálogo por proveedor con presentación y unidad de compra. Cajas, paquetes y botellas aceptan enteros; kilos y litros admiten hasta tres decimales.
+- Preparación en tres pasos: proveedor, productos/cantidades y revisión del mensaje.
+- Borradores recuperables, historial, repetición como un pedido nuevo y copias históricas de nombres y presentaciones.
+- Mensajes para copiar o abrir en WhatsApp. El encargado presiona Enviar en WhatsApp. La plataforma solo registra una confirmación manual, nunca infiere entrega o envío por abrir un enlace.
+- PWA con iconos, manifiesto, entrada breve animada, navegación móvil y preferencia de movimiento reducido.
+
+Voz, dashboard analítico, facturas, pagos e inventario no forman parte de esta versión.
+
+## Desarrollo
+
+Usa Node.js 24 LTS, también declarado en `package.json` para Vercel. La versión instalada del cliente Supabase requiere Node.js 22 o posterior.
+
+```sh
 npm install
-npm run dev
+npm run dev -- --port 3001
+npm test
+npm run build
 ```
 
-Abrir http://localhost:3000. `npm run build` crea producción; `npm start` la sirve. `npm test` ejecuta las pruebas de catálogo y pagos.
+`NEXT_BUILD_DIR` permite separar el directorio de la compilación y el del servidor de desarrollo. `.next-purchasing` es el directorio predeterminado.
 
-## Experiencia 3D
+## Demostración y espacio conectado
 
-- El inicio permanece visible y el café se sirve a medida que avanzas con el scroll. Al subir se revierte el llenado.
-- La tartaleta de frutillas original vuelve como modelo 3D de referencia, con masa, crema, frutillas, glaseado y menta. No se agrega al catálogo porque no aparece en las cartas.
-- La misma sección permite explorar un pie de limón, un sándwich y una fajita en 3D por capas.
-- Las fichas muestran modelos 3D. Solo las preparaciones apropiadas permiten separar ingredientes; brownies, muffins, galletas, infusiones y otros productos se muestran completos.
-- Con movimiento reducido, las escenas se presentan en su estado final y no requieren recorrer una sección extensa. Sin WebGL se ofrece una alternativa.
+Sin configuración de Supabase se abre una **demostración local claramente identificada**. Incluye proveedores ficticios sin teléfono. Los cambios e historial se guardan en este navegador (`localStorage`), no hay cuentas privadas ni sincronización. La opción Mi espacio permite exportar una copia JSON. No ingreses datos privados en un dispositivo compartido.
 
-## Catálogo de las cinco cartas
+El espacio conectado requiere la configuración siguiente. Su integración está implementada; no se considera desplegada una base de datos real hasta aplicar la migración y configurar un proyecto propio.
 
-Hay 90 productos: 13 cafés e infusiones, 17 cafés fríos, 15 productos de pastelería, 30 sándwiches, 12 fajitas y 3 ensaladas. Todos tienen enlace a su carta original, y se pueden abrir las cinco imágenes desde la página.
+1. Crea un proyecto en Supabase y ejecuta una vez `supabase/migrations/202611020001_purchasing.sql` en su editor SQL. También puedes aplicar la migración mediante Supabase CLI.
+2. Crea el primer usuario autorizado desde **Authentication → Users** en Supabase. La aplicación no ofrece registro público.
+3. Copia `.env.example` a `.env.local` y configura `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (o la clave `anon` heredada). Estas son claves públicas destinadas al cliente; nunca uses una clave secreta o `service_role` aquí.
+4. Reinicia el servidor. Ingresa con el usuario creado y crea el espacio de la cafetería en el primer acceso.
+5. Para autorizar al encargado en el mismo espacio, crea su usuario en Authentication y agrega desde el editor SQL una fila de `memberships` con el UUID del espacio, el UUID del usuario y el rol `buyer`. Esa operación corresponde al administrador; los usuarios no pueden concederse permisos a otro espacio.
+6. En Vercel configura las mismas variables para el entorno de despliegue y vuelve a desplegar: las variables `NEXT_PUBLIC_` se incorporan durante la compilación.
 
-Incluye café mediano/grande, panes con recargos, variedades de rellenos y ensaladas configurables: grande con una proteína y cuatro vegetales; pequeña con tres vegetales. Atún, churrasco y lengua tienen recargo de $400 en la ensalada grande.
+## Datos y permisos
 
-Cafés fríos y fajitas no muestran precio en las imágenes: están disponibles para consulta pero bloqueados para pago. Las salsas se listan tal como aparecen; sus condiciones no se inventan. Los nombres e ingredientes de recetas tradicionales pueden requerir validación del local. El modelado es referencial, no una declaración de alérgenos.
+PostgreSQL mantiene espacios, membresías, proveedores, productos, pedidos y detalles. RLS restringe los datos a los miembros autenticados. Los usuarios no tienen permisos directos para escribir pedidos o membresías: funciones transaccionales controlan la creación del espacio, el guardado y la confirmación manual.
 
-## Webpay Plus
+El servidor valida proveedor, productos, cantidades y unidades, y toma las descripciones desde la base de datos. El guardado es atómico, conserva el historial, mantiene el orden de las líneas y evita duplicados al reintentar una preparación. Archivar un proveedor o producto conserva los pedidos anteriores. Repetir filtra los productos archivados y avisa al usuario.
 
-El flujo de pago está implementado con la API REST oficial: crear transacción, redirigir a Transbank, confirmar en el servidor y mostrar comprobante. **Por defecto funciona en integración, sin cobros reales.**
+## Instalación y conexión
 
-No se necesitan credenciales privadas para la integración: se usan las públicas de prueba de Transbank en el servidor. No ingreses tarjetas reales.
+Abre la aplicación mediante HTTPS. En Chrome compatible puede ofrecer instalación; en iPhone utiliza Safari → Compartir → Agregar a pantalla de inicio. El servicio worker guarda únicamente los iconos y la pantalla informativa sin conexión. **No almacena páginas privadas, contactos, respuestas de Supabase ni peticiones de escritura.** El espacio conectado necesita internet. Los borradores en este dispositivo no implican sincronización sin conexión.
 
-1. Agrega un producto con precio al carrito y selecciona «Continuar a Webpay».
-2. En integración, usa los datos de prueba de [Transbank](https://transbankdevelopers.com/documentacion/como_empezar#tarjetas-de-prueba). VISA aprobada: `4051885600446623`, CVV `123`, vencimiento futuro. Autenticación de prueba: RUT `11.111.111-1`, clave `123`.
-3. Al regresar, el servidor verifica `status=AUTHORIZED`, `response_code=0`, monto, orden y sesión antes de marcar el pedido pagado.
-4. El comprobante distingue aprobación, rechazo, cancelación, expiración y confirmación pendiente. El carrito se limpia solo tras una aprobación y si conserva la selección de ese intento.
+## Verificación
 
-La URL local es apta para volver al navegador que ejecuta la prueba. Si usas otro dominio o puerto, copia `.env.example` a `.env.local` y configura `APP_URL` con el origen exacto. No mezcles `localhost` y `127.0.0.1` durante una prueba.
+`npm test` ejecuta pruebas de reglas de compra y la migración en PostgreSQL embebido (PGlite). Incluye aislamiento entre dos espacios, permisos anónimos, intentos de elevar privilegios, integridad entre proveedores, cantidades, atomicidad, idempotencia, borradores y conservación histórica. Estas pruebas no sustituyen la comprobación final con el proyecto Supabase conectado.
 
-### Producción
+## Diseño
 
-Para cobrar de verdad se requieren afiliación y validación de Transbank, código de comercio y API key propios. Configura `WEBPAY_ENV=production`, las credenciales, `APP_URL` HTTPS y `ORDER_DATA_DIR` en un volumen persistente. El servidor rechaza una configuración incompleta. No publiques las claves ni las agregues a Git.
-
-El almacenamiento actual usa archivos atómicos y bloqueo por orden en `.data/orders`, excluido de Git. Está pensado para desarrollo o una sola instancia de servidor con disco persistente. Para hosting sin disco persistente o con varias réplicas, migra el repositorio de pedidos a una base de datos transaccional compartida antes de activar cobros. Implementa recepción operativa en cocina, disponibilidad, horarios de retiro y administración antes de ofrecer retiros reales. Los pedidos de integración nunca deben prepararse.
-
-### Archivos
-
-- `lib/catalog.mjs`: catálogo completo y cálculo de precios compartido por cliente y servidor.
-- `lib/webpay.mjs`: API Transbank y verificación de pagos.
-- `lib/order-store.mjs`: almacenamiento de pedidos y acceso al comprobante.
-- `app/api/webpay/*`: configuración pública, creación y retorno GET/POST.
-- `app/api/orders/[id]`: comprobante protegido con cookie HttpOnly.
-- `components/Hero.jsx`: máquina 3D vinculada al scroll.
-- `components/FoodScene.jsx`: modelos 3D de alimentos.
-- `components/Tart.jsx`: experiencia de desglose con scroll.
-- `components/Menu.jsx`: búsqueda, categorías, opciones y cartas originales.
-- `tests/checkout.test.mjs`: pruebas de precios, validación, pagos y persistencia.
-
-Los precios proceden del material proporcionado; deben confirmarse antes de abrir ventas. No se inventaron dirección, horarios ni testimonios.
-
-La conexión a Transbank respeta `HTTP_PROXY`, `HTTPS_PROXY` y `NO_PROXY`. En desarrollo Windows también consulta, de forma no interactiva y solo de lectura, el proxy del sistema; no modifica la configuración del equipo ni guarda su dirección. Se puede desactivar con `WEBPAY_USE_SYSTEM_PROXY=false`. En producción configura las variables del entorno si tu infraestructura requiere un proxy.
-
-## Actualización visual
-
-Los seis destacados ahora usan imágenes de estilo fotográfico generadas con IA y señaladas como referenciales. Archivos JPEG optimizados en `public/menu/`; prompts y procedencia en `docs/product-images.md`.
-
-Los modelos principales usan superficies y texturas procedurales: marraqueta partida, carne con volumen y pliegues, tomate con pulpa y semillas, palta en láminas, tortilla que se abre, porción triangular de pie con merengue acanalado y tartaleta con masa acanalada y frutillas con semillas. Las etiquetas se vinculan a las capas 3D y aparecen según el progreso del desplazamiento. El glaseado permanece como película sobre la fruta.
-
-La pastelería utiliza modelos específicos (`BakeryModel.jsx` y `DetailedShapes.js`): medialuna laminada, roll en espiral, kuchen con coberturas distintas de manzana, nuez y plátano, cheesecake, queque con miga, brownie, muffin, cookies, cuchuflís y donas. El pie de limón conserva su modelo anterior.
-
-Las fajitas cerradas se presentan en dos mitades con corte diagonal, tortilla tostada, solapa y extremo plegado. Al abrirlas se conserva el desglose por capas. `SaladModel.jsx` construye hojas onduladas, cortes de vegetales y proteínas; la vista se actualiza con las opciones de la ficha. Antes de seleccionar se muestra una combinación de ejemplo, identificada en pantalla. Las recetas siguen siendo referenciales.
-
-El visor de la ficha se reutiliza entre productos y pausa el renderizado mientras el modal está cerrado.
-
-## Carrito y controles 360°
-
-Cada vista de producto 3D permite girar horizontalmente sin límite mediante arrastre, botones de giro o flechas del teclado (con foco en el visor). «Restablecer» o la tecla Inicio recuperan la orientación inicial. El desglose por scroll y el botón de separar ingredientes siguen funcionando.
-
-«Agregar al carrito» aparece en todas las tarjetas. Las fichas permiten elegir entre 1 y 20 unidades antes de añadir. Preparaciones iguales se suman en una línea; variantes con opciones diferentes se mantienen separadas. El carrito flotante permanece accesible durante la navegación, muestra unidades y total, y permite aumentar, disminuir o eliminar cada preparación antes de continuar a Webpay Plus. Los importes se validan de nuevo en el servidor.
-
-`lib/cart.mjs` concentra la suma de unidades y los límites de cantidad. Las pruebas incluyen acumulación de preparaciones equivalentes, variantes separadas, eliminación y recálculo de totales. El pago sigue en integración hasta configurar las credenciales y requisitos de producción descritos arriba.
+Componentes propios con iconos de Lucide. Referencias revisadas: Animate UI, Uiverse, ForgeUI, Uilora, Vengeance UI y 60fps.design. No se copiaron componentes premium ni se crearon cuentas para estas referencias. La entrada animada y las microinteracciones se implementan con CSS para evitar peso innecesario.
